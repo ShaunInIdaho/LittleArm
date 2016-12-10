@@ -6,27 +6,36 @@
 import time
 import serial
 import serial.tools.list_ports
+import subprocess
+import os
+import sys
 
 #+++++++++++++Global Variables+++++++++++++++++++++
 
-ser = serial.Serial('COM3', 9600)
+ser = serial.Serial('/dev/ttyUSB0', 9600)
 defaultPos = {'base': '108', 'shoulder':'154','elbow':'32','gripper':'5','speed':'4'}
 currentPos = {}
 
 #++++++++++++++++Functions+++++++++++++++++++++++
+def audioOutput (words):
+    tempfile = "temp.wav"
+    devnull = open("/dev/null","w")
+    subprocess.call(["pico2wave", "-w", tempfile, words],stderr=devnull)
+    subprocess.call(["aplay", tempfile],stderr=devnull)
+    os.remove(tempfile)
+
+    
 def getPos(part):
     global currentPos
     global defaultPos
     if currentPos.has_key(part):
         position = currentPos[part]
-        print "Getting position for "+part+" from current"
     else:
         position = defaultPos[part]
-        print "Getting position for "+part+" from default"
     return position
 
 
-def sendCommand(base = False, shoulder = False, elbow = False, gripper = False, speed = False, wait = 0):
+def sendCommand(base = False, shoulder = False, elbow = False, gripper = False, speed = False, wait = 0, speak = False):
     # Function to send command to arduino
     args = locals().keys()
     global currentPos
@@ -45,7 +54,9 @@ def sendCommand(base = False, shoulder = False, elbow = False, gripper = False, 
     ser.flushInput()
     ser.flushOutput()
     currentPos = {'base': base, 'shoulder': shoulder, 'elbow': elbow, 'gripper': gripper, 'speed': speed}
-    print currentPos
+    if speak:
+        audioOutput(speak)
+    
     command = currentPos['base']+','+currentPos['shoulder']+','+currentPos['elbow']+','+currentPos['gripper']+','+currentPos['speed']+'\n'
     ser.write(command)
     
@@ -53,12 +64,14 @@ def sendCommand(base = False, shoulder = False, elbow = False, gripper = False, 
         time.sleep(int(wait))
         return
 
-    #wait until a repsonse if found from the arduino
+    # Wait until a repsonse if found from the arduino
     OK = 'no'
     while (OK != 'd'):
         OK = ser.read(1)
 
+
 def clap (claps = 3):
+    sendCommand(speak = 'Hooray!!!')
     for index in range(int(claps)):
         # Close gripper
         sendCommand(gripper='5', speed='4') 
@@ -82,14 +95,8 @@ def shoulderDown():
     sendCommand(shoulder = '15', elbow = '0')
 
 def fistBump():
-    sendCommand (base = '180', shoulder = '55', elbow = '30', gripper = '70', speed = '5', wait = '2')
+    sendCommand (base = '180', shoulder = '55', elbow = '30', gripper = '70', speed = '5', wait = '2',speak='Fist bump time!')
     sendCommand (elbow = '130', shoulder = '154', speed = '4', wait = '1')
     sendCommand (elbow = '55', wait = '0')
     sendCommand (gripper = '5')
-
-    goHome()
-    salute()
-    shoulderDown()
-    fistBump()
-    clap()
 
